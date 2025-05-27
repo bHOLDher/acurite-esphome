@@ -83,6 +83,7 @@ void AcuRiteComponent::decode_fridge_(uint8_t *data, uint8_t len) {
 }
 
 void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
+  ESP_LOGV(TAG, "decode_temperature_ %" PRIi32, len);
   if (len == 10 && this->validate_(data, len, -1)) {
     u_int8_t deviceId = (data[0] << 4) | (data[1] >> 4);
     float temp = (float)((((int32)(data[1] & 0x0F) << 8) | (int32)data[2]) - 400) / 10;
@@ -303,15 +304,24 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
   uint32_t bits = 0;
   uint32_t syncs = 0;
 
-  ESP_LOGV(TAG, "Received raw data with length %" PRIi32, data.size());
+  if (data.size() > 171 && data.size() < 175)
+    ESP_LOGV(TAG, "Received raw data with length %" PRIi32, data.size());
 
   // decode AcuRite OOK data
-  data.set_tolerance(100, remote_base::TOLERANCE_MODE_TIME);
+  data.set_tolerance(200, remote_base::TOLERANCE_MODE_TIME);
+  // while (data.is_valid(2)) {
   while (data.is_valid(2)) {
     bool is_sync = data.peek_mark(500,1) && data.peek_space(1000);
     bool is_zero = data.peek_mark(1500,1) && data.peek_space(1000);
     bool is_one = data.peek_mark(500,1) && data.peek_space(1000);
     if ((is_one || is_zero) && syncs > 4) {
+      if (bits == 0) {
+        // Align bits
+        data.advance(2);
+        ESP_LOGV(TAG, "Found Sync, %" PRIi32, syncs);
+      }
+      //
+      //ESP_LOGV(TAG, "Found Syncs, Received raw data with length %" PRIi32, data.size());
       if (data.peek(1) > 0) {
         // detect bits using on state
         bytes[bits / 8] <<= 1;
@@ -333,11 +343,15 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
         if (bits >= sizeof(bytes) * 8) {
           bits = 0;
           syncs = 0;
+          ESP_LOGV(TAG, "Buffer full");
         }
+      data.advance();
       }
     } else if (is_sync && bits == 0) {
       // count syncs
       syncs++;
+      data.advance();
+      //ESP_LOGV(TAG, "S %" PRIi32, syncs);
     } else {
       // reset state
       bits = 0;
