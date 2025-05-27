@@ -19,25 +19,42 @@ bool AcuRiteComponent::validate_(uint8_t *data, uint8_t len, int8_t except) {
   ESP_LOGV(TAG, "Validating data: %s", format_hex(data, len).c_str());
 
   // checksum
-  uint8_t sum = 0;
-  for (int32_t i = 0; i < len - 1; i++) {
-    sum += data[i];
-  }
-  if (sum != data[len - 1]) {
-    ESP_LOGV(TAG, "Checksum failure %02x vs %02x", sum, data[len - 1]);
-    return false;
-  }
+  // uint8_t sum = 0;
+  // for (int32_t i = 0; i < len - 1; i++) {
+  //   sum += data[i];
+  // }
+  // if (sum != data[len - 1]) {
+  //   ESP_LOGV(TAG, "Checksum failure %02x vs %02x", sum, data[len - 1]);
+  //   return false;
+  // }
 
   // parity (excludes id and crc)
-  for (int32_t i = 2; i < len - 1; i++) {
-    uint8_t sum = 0;
-    for (int32_t b = 0; b < 8; b++) {
-      sum ^= data[i] >> b;
+  // for (int32_t i = 2; i < len - 1; i++) {
+  //   uint8_t sum = 0;
+  //   for (int32_t b = 0; b < 8; b++) {
+  //     sum ^= data[i] >> b;
+  //   }
+  //   if ((sum & 1) != 0 && i != except) {
+  //     ESP_LOGV(TAG, "Parity failure");
+  //     return false;
+  //   }
+  // }
+  uint8_t crc = 0;
+  uint8_t checklen = 9;
+  uint8_t *addr = &data[0];
+  // Indicated changes are from reference CRC-8 function in OneWire library
+  while (checklen--) {
+    uint8_t inbyte = *addr++;
+    for (uint8_t i = 8; i; i--) {
+      uint8_t mix = (crc ^ inbyte) & 0x80; // changed from & 0x01
+      crc <<= 1; // changed from right shift
+      if (mix) crc ^= 0x31;// changed from 0x8C;
+      inbyte <<= 1; // changed from right shift
     }
-    if ((sum & 1) != 0 && i != except) {
-      ESP_LOGV(TAG, "Parity failure");
-      return false;
-    }
+  }
+  if (data[9] != crc) {
+    ESP_LOGV(TAG, "crc received: %s, calculated: %s",format_hex_pretty(data[9]).c_str(),format_hex_pretty(crc).c_str());
+    return false;
   }
   return true;
 }
@@ -66,20 +83,38 @@ void AcuRiteComponent::decode_fridge_(uint8_t *data, uint8_t len) {
 }
 
 void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
-  if (len == 7 && (data[2] & 0x3F) == 0x04 && this->validate_(data, 7, -1)) {
-    char channel = CHANNEL_LUT[data[0] >> 6];
-    uint16_t id = ((data[0] & 0x3F) << 8) | (data[1] & 0xFF);
-    uint16_t battery = (data[2] >> 6) & 1;
-    float humidity = data[3] & 0x7F;
-    float temp = ((float) (((data[4] & 0x0F) << 7) | (data[5] & 0x7F)) - 1000) / 10.0;
-    ESP_LOGD(TAG, "Temperature: ch %c, id %04x, bat %x, temp %.1f, rh %.1f", channel, id, battery, temp, humidity);
+  if (len == 10 && this->validate_(data, len, -1)) {
+    u_int8_t deviceId = (data[0] << 4) | (data[1] >> 4);
+    float temp = (float)((((int32)(data[1] & 0x0F) << 8) | (int32)data[2]) - 400) / 10;
+    u_int8_t humidity = data[3];
+    float windAvg = (float)data[4] * 0.34;
+    float windGust = (float)data[5] * 0.34;
+    float rain = (float)((int32)data[6] << 8 | (int32)data[7]) * 0.2794;
+    u_int8_t batteryFlag = data[8] >> 4;
+    float windDirection = (float)(data[8] & 0x0F) * 22.5;
+
+    ESP_LOGD(TAG, "Temperature: id %04x, bat %x, temp %.1f, rh %.1f", deviceId, batteryFlag, temp, humidity);
     for (auto *device : this->devices_) {
-      if (device->get_id() == id) {
-        device->update_battery(battery);
+      //if (device->get_id() == deviceId) {
+        device->update_battery(batteryFlag);
         device->update_temperature(temp);
         device->update_humidity(humidity);
-      }
+      //}
     }
+
+    // char channel = CHANNEL_LUT[data[0] >> 6];
+    // uint16_t id = ((data[0] & 0x3F) << 8) | (data[1] & 0xFF);
+    // uint16_t battery = (data[2] >> 6) & 1;
+    // float humidity = data[3] & 0x7F;
+    // float temp = ((float) (((data[4] & 0x0F) << 7) | (data[5] & 0x7F)) - 1000) / 10.0;
+    // ESP_LOGD(TAG, "Temperature: ch %c, id %04x, bat %x, temp %.1f, rh %.1f", channel, id, battery, temp, humidity);
+    // for (auto *device : this->devices_) {
+    //   if (device->get_id() == id) {
+    //     device->update_battery(battery);
+    //     device->update_temperature(temp);
+    //     device->update_humidity(humidity);
+    //   }
+    // }
   }
 }
 
@@ -272,12 +307,12 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
 
   // decode AcuRite OOK data
   data.set_tolerance(100, remote_base::TOLERANCE_MODE_TIME);
-  while (data.is_valid()) {
-    bool is_sync = data.peek_mark(600) || data.peek_space(600);
-    bool is_zero = data.peek_mark(200) || data.peek_space(400);
-    bool is_one = data.peek_mark(400) || data.peek_space(200);
+  while (data.is_valid(2)) {
+    bool is_sync = data.peek_mark(500,1) && data.peek_space(1000);
+    bool is_zero = data.peek_mark(1500,1) && data.peek_space(1000);
+    bool is_one = data.peek_mark(500,1) && data.peek_space(1000);
     if ((is_one || is_zero) && syncs > 4) {
-      if (data.peek() > 0) {
+      if (data.peek(1) > 0) {
         // detect bits using on state
         bytes[bits / 8] <<= 1;
         bytes[bits / 8] |= is_one ? 1 : 0;
@@ -286,12 +321,12 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
         // try to decode on whole bytes
         if ((bits & 7) == 0) {
           this->decode_temperature_(bytes, bits / 8);
-          this->decode_rainfall_(bytes, bits / 8);
-          this->decode_lightning_(bytes, bits / 8);
-          this->decode_atlas_(bytes, bits / 8);
-          this->decode_notos_(bytes, bits / 8);
-          this->decode_iris_(bytes, bits / 8);
-          this->decode_fridge_(bytes, bits / 8);
+          // this->decode_rainfall_(bytes, bits / 8);
+          // this->decode_lightning_(bytes, bits / 8);
+          // this->decode_atlas_(bytes, bits / 8);
+          // this->decode_notos_(bytes, bits / 8);
+          // this->decode_iris_(bytes, bits / 8);
+          // this->decode_fridge_(bytes, bits / 8);
         }
 
         // reset if buffer is full
