@@ -41,6 +41,14 @@ void AcuRiteSensor::update_speed(float value) {
     }
   }
 }
+void AcuRiteSensor::update_gust_speed(float value) {
+  if (this->gust_speed_sensor_) {
+    // do not confirm wind values as they can change rapidly
+    if (value >= 0.0f && value <= 257.0f) {
+      this->gust_speed_sensor_->publish_state(value);
+    }
+  }
+}
 
 void AcuRiteSensor::update_temperature(float value) {
   if (this->temperature_sensor_) {
@@ -95,6 +103,7 @@ void AcuRiteSensor::update_rainfall(uint32_t count) {
 void AcuRiteSensor::dump_config() {
   ESP_LOGCONFIG(TAG, "AcuRite Sensor: 0x%04x", this->id_);
   LOG_SENSOR("  ", "Speed", this->speed_sensor_);
+  LOG_SENSOR("  ", "Gust Speed", this->gust_speed_sensor_);
   LOG_SENSOR("  ", "Direction", this->direction_sensor_);
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
   LOG_SENSOR("  ", "Humidity", this->humidity_sensor_);

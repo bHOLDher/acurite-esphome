@@ -9,6 +9,7 @@ class AcuRiteDevice {
  public:
   virtual void update_battery(uint8_t value) {}
   virtual void update_speed(float value) {}
+  virtual void update_gust_speed(float value) {}
   virtual void update_direction(float value) {}
   virtual void update_temperature(float value) {}
   virtual void update_humidity(float value) {}

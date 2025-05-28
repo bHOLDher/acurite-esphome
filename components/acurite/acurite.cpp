@@ -83,24 +83,32 @@ void AcuRiteComponent::decode_fridge_(uint8_t *data, uint8_t len) {
 }
 
 void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
-  ESP_LOGV(TAG, "decode_temperature_ %" PRIi32, len);
+  //ESP_LOGV(TAG, "decode_temperature_ %" PRIi32, len);
   if (len == 10 && this->validate_(data, len, -1)) {
-    u_int8_t deviceId = (data[0] << 4) | (data[1] >> 4);
+    //u_int8_t deviceId = (data[0] << 4) | (data[1] >> 4);
+    unsigned deviceId = (data[0] << 4) | (data[1] >> 4);
     float temp = (float)((((int32)(data[1] & 0x0F) << 8) | (int32)data[2]) - 400) / 10;
-    u_int8_t humidity = data[3];
+    //u_int8_t humidity = data[3];
+    float humidity = (float)data[3];
     float windAvg = (float)data[4] * 0.34;
     float windGust = (float)data[5] * 0.34;
     float rain = (float)((int32)data[6] << 8 | (int32)data[7]) * 0.2794;
-    u_int8_t batteryFlag = data[8] >> 4;
+    //u_int8_t batteryFlag = data[8] >> 4;
+    unsigned batteryFlag = (data[8] >> 4) == 0 ? 100 : 0;
     float windDirection = (float)(data[8] & 0x0F) * 22.5;
 
     ESP_LOGD(TAG, "Temperature: id %04x, bat %x, temp %.1f, rh %.1f", deviceId, batteryFlag, temp, humidity);
     for (auto *device : this->devices_) {
-      //if (device->get_id() == deviceId) {
-        device->update_battery(batteryFlag);
+      if (device->get_id() == deviceId) {
         device->update_temperature(temp);
         device->update_humidity(humidity);
-      //}
+        device->update_rainfall(rain);
+        device->update_speed(windAvg);
+        device->update_gust_speed(windGust);
+        device->update_direction(windDirection);
+
+        device->update_battery(batteryFlag);
+      }
     }
 
     // char channel = CHANNEL_LUT[data[0] >> 6];
@@ -307,9 +315,8 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
   if (data.size() > 171 && data.size() < 175)
     ESP_LOGV(TAG, "Received raw data with length %" PRIi32, data.size());
 
-  // decode AcuRite OOK data
+  // decode WH1080 OOK data
   data.set_tolerance(200, remote_base::TOLERANCE_MODE_TIME);
-  // while (data.is_valid(2)) {
   while (data.is_valid(2)) {
     bool is_sync = data.peek_mark(500,1) && data.peek_space(1000);
     bool is_zero = data.peek_mark(1500,1) && data.peek_space(1000);
@@ -317,11 +324,13 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
     if ((is_one || is_zero) && syncs > 4) {
       if (bits == 0) {
         // Align bits
-        data.advance(2);
-        ESP_LOGV(TAG, "Found Sync, %" PRIi32, syncs);
+        if (data.size() == 174)
+        {
+          data.advance(2);
+        }
+        //ESP_LOGV(TAG, "Found Sync, %" PRIi32, syncs);
       }
       //
-      //ESP_LOGV(TAG, "Found Syncs, Received raw data with length %" PRIi32, data.size());
       if (data.peek(1) > 0) {
         // detect bits using on state
         bytes[bits / 8] <<= 1;
@@ -331,19 +340,12 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
         // try to decode on whole bytes
         if ((bits & 7) == 0) {
           this->decode_temperature_(bytes, bits / 8);
-          // this->decode_rainfall_(bytes, bits / 8);
-          // this->decode_lightning_(bytes, bits / 8);
-          // this->decode_atlas_(bytes, bits / 8);
-          // this->decode_notos_(bytes, bits / 8);
-          // this->decode_iris_(bytes, bits / 8);
-          // this->decode_fridge_(bytes, bits / 8);
         }
 
         // reset if buffer is full
         if (bits >= sizeof(bytes) * 8) {
           bits = 0;
           syncs = 0;
-          ESP_LOGV(TAG, "Buffer full");
         }
       data.advance();
       }
@@ -351,7 +353,6 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
       // count syncs
       syncs++;
       data.advance();
-      //ESP_LOGV(TAG, "S %" PRIi32, syncs);
     } else {
       // reset state
       bits = 0;

@@ -9,6 +9,7 @@ namespace acurite {
 class AcuRiteSensor : public Component, public AcuRiteDevice {
  public:
   void update_speed(float value) override;
+  void update_gust_speed(float value) override;
   void update_direction(float value) override;
   void update_temperature(float value) override;
   void update_humidity(float value) override;
@@ -28,6 +29,7 @@ class AcuRiteSensor : public Component, public AcuRiteDevice {
 
   SUB_SENSOR(direction)
   SUB_SENSOR(speed)
+  SUB_SENSOR(gust_speed)
   SUB_SENSOR(temperature)
   SUB_SENSOR(humidity)
   SUB_SENSOR(distance)
