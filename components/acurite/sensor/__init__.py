@@ -8,7 +8,6 @@ from esphome.const import (
     CONF_HUMIDITY,
     CONF_ID,
     CONF_SPEED,
-    #CONF_GUST_SPEED,
     CONF_TEMPERATURE,
     DEVICE_CLASS_DISTANCE,
     DEVICE_CLASS_EMPTY,
@@ -39,6 +38,7 @@ CONF_LIGHTNING = "lightning"
 CONF_UV = "uv"
 CONF_LUX = "lux"
 UNIT_MILLIMETER = "mm"
+UNIT_METERS_PER_SECOND = "m/s"
 CONF_GUST_SPEED = "gust_speed"
 
 AcuRiteSensor = acurite_ns.class_("AcuRiteSensor", cg.Component)
@@ -48,13 +48,13 @@ DEVICE_SCHEMA = cv.Schema(
         cv.GenerateID(): cv.declare_id(AcuRiteSensor),
         cv.Required(CONF_DEVICE): cv.hex_int_range(max=0x3FFF),
         cv.Optional(CONF_SPEED): sensor.sensor_schema(
-            unit_of_measurement=UNIT_KILOMETER_PER_HOUR,
+            unit_of_measurement=UNIT_METERS_PER_SECOND,
             accuracy_decimals=1,
             device_class=DEVICE_CLASS_WIND_SPEED,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
         cv.Optional(CONF_GUST_SPEED): sensor.sensor_schema(
-            unit_of_measurement=UNIT_KILOMETER_PER_HOUR,
+            unit_of_measurement=UNIT_METERS_PER_SECOND,
             accuracy_decimals=1,
             device_class=DEVICE_CLASS_WIND_SPEED,
             state_class=STATE_CLASS_MEASUREMENT,

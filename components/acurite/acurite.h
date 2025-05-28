@@ -14,7 +14,7 @@ class AcuRiteDevice {
   virtual void update_temperature(float value) {}
   virtual void update_humidity(float value) {}
   virtual void update_distance(float value) {}
-  virtual void update_rainfall(uint32_t count) {}
+  virtual void update_rainfall(float value) {}
   virtual void update_lightning(uint32_t count) {}
   virtual void update_uv(float value) {}
   virtual void update_lux(float value) {}

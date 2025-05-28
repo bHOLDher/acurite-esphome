@@ -86,7 +86,7 @@ void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
   //ESP_LOGV(TAG, "decode_temperature_ %" PRIi32, len);
   if (len == 10 && this->validate_(data, len, -1)) {
     //u_int8_t deviceId = (data[0] << 4) | (data[1] >> 4);
-    unsigned deviceId = (data[0] << 4) | (data[1] >> 4);
+    uint8_t deviceId = (data[0] << 4) | (data[1] >> 4);
     float temp = (float)((((int32)(data[1] & 0x0F) << 8) | (int32)data[2]) - 400) / 10;
     //u_int8_t humidity = data[3];
     float humidity = (float)data[3];
@@ -94,7 +94,7 @@ void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
     float windGust = (float)data[5] * 0.34;
     float rain = (float)((int32)data[6] << 8 | (int32)data[7]) * 0.2794;
     //u_int8_t batteryFlag = data[8] >> 4;
-    unsigned batteryFlag = (data[8] >> 4) == 0 ? 100 : 0;
+    uint8_t batteryFlag = (data[8] >> 4) == 0 ? 100 : 0;
     float windDirection = (float)(data[8] & 0x0F) * 22.5;
 
     ESP_LOGD(TAG, "Temperature: id %04x, bat %x, temp %.1f, rh %.1f", deviceId, batteryFlag, temp, humidity);
@@ -106,7 +106,6 @@ void AcuRiteComponent::decode_temperature_(uint8_t *data, uint8_t len) {
         device->update_speed(windAvg);
         device->update_gust_speed(windGust);
         device->update_direction(windDirection);
-
         device->update_battery(batteryFlag);
       }
     }
@@ -317,7 +316,7 @@ bool AcuRiteComponent::on_receive(remote_base::RemoteReceiveData data) {
 
   // decode WH1080 OOK data
   data.set_tolerance(200, remote_base::TOLERANCE_MODE_TIME);
-  while (data.is_valid(2)) {
+  while (data.is_valid(1)) {
     bool is_sync = data.peek_mark(500,1) && data.peek_space(1000);
     bool is_zero = data.peek_mark(1500,1) && data.peek_space(1000);
     bool is_one = data.peek_mark(500,1) && data.peek_space(1000);

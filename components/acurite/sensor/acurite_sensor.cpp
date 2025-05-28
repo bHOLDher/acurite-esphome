@@ -90,13 +90,13 @@ void AcuRiteSensor::update_lightning(uint32_t count) {
   }
 }
 
-void AcuRiteSensor::update_rainfall(uint32_t count) {
+void AcuRiteSensor::update_rainfall(float value) {
   if (this->rainfall_sensor_) {
     // filter out crc false positives by confirming any change in value
-    if (count == this->rainfall_last_) {
-      this->rainfall_sensor_->publish_state(count * 0.254f);
+    if (value == this->rainfall_last_) {
+      this->rainfall_sensor_->publish_state(value);
     }
-    this->rainfall_last_ = count;
+    this->rainfall_last_ = value;
   }
 }
 

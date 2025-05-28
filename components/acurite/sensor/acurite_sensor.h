@@ -14,14 +14,14 @@ class AcuRiteSensor : public Component, public AcuRiteDevice {
   void update_temperature(float value) override;
   void update_humidity(float value) override;
   void update_distance(float value) override;
-  void update_rainfall(uint32_t count) override;
+  void update_rainfall(float value) override;
   void update_lightning(uint32_t count) override;
   void update_uv(float value) override;
   void update_lux(float value) override;
   void dump_config() override;
 
  protected:
-  uint32_t rainfall_last_{0xFFFFFFFF};
+  float rainfall_last_{0};
   uint32_t lightning_last_{0xFFFFFFFF};
   float distance_last_{1000};
   float humidity_last_{1000};
